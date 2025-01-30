@@ -317,7 +317,10 @@ class MessageManager:
 				if '\n' in content:
 					content = content.split('\n', 1)[1]
 			# Parse the cleaned content
-			return json.loads(content)
+			out = json.loads(content)
+			pretty = json.dumps(out, indent=2)
+			logging.debug(f'Parsed model output: {pretty}')
+			return out
 		except json.JSONDecodeError as e:
 			logger.warning(f'Failed to parse model output: {content} {str(e)}')
 			raise ValueError('Could not parse response.')
