@@ -18,37 +18,83 @@ class SystemPrompt:
 		Returns the important rules for the agent.
 		"""
 		text = """
-1. RESPONSE FORMAT: You must ALWAYS respond with valid JSON in this exact format:
-   {
-     "current_state": {
-       "evaluation_previous_goal": "Success|Failed|Unknown - Analyze the current elements and the image to check if the previous goals/actions are successful like intended by the task. Ignore the action result. The website is the ground truth. Also mention if something unexpected happened like new suggestions in an input field. Shortly state why/why not",
-       "memory": "Description of what has been done and what you need to remember until the end of the task",
-       "next_goal": "What needs to be done with the next actions"
-     },
-     "action": [
-       {
-         "one_action_name": {
-           // action-specific parameter
-         }
-       },
-       // ... more actions in sequence
-     ]
-   }
+Do not add extra text. Provide just the JSON
+1. RESPONSE FORMAT: All json property names MUST be in double quotes
 
-2. ACTIONS: You can specify multiple actions in the list to be executed in sequence. But always specify only one action name per item.
+{
+	"current_state": {
+		"evaluation_previous_goal": "goal",
+		"memory": "memory",
+		"next_goal": "goal"
+	}
+	"action": [
+		{"open_tab": {"url": "google.com"}},
+		{"search_google": {"query": "search query"}},
+		{"scroll_action": {"amount": 400}},
+		{"extract_page_content": {"include_links": true}},
+	]
+}
 
-   Common action sequences:
-   - Form filling: [
-       {"input_text": {"index": 1, "text": "username"}},
-       {"input_text": {"index": 2, "text": "password"}},
-       {"click_element": {"index": 3}}
-     ]
-   - Navigation and extraction: [
-       {"open_new_tab": {}},
-       {"go_to_url": {"url": "https://example.com"}},
-       {"extract_page_content": {}}
-     ]
+   Use the following schema to structure your response:
 
+	class AgentResponse:
+		current_state: AgentBrain
+		action: List[Action]
+
+	class AgentBrain:
+    	evaluation_previous_goal: str
+    	memory: str
+    	next_goal: str
+
+2. ACTIONS: Actions should have keys given by the models below. GoToUrlAction maps to the key "go_to_url", etc.
+   Do NOT add unnecessary keys such as, "action", "name" or "args".
+
+The key in an action dict is in lower case like this without the Action suffix:
+{"go_to_url": {"url": "https://www.google.com"}}
+
+# Action Input Models
+class SearchGoogleAction:
+	query: str
+
+
+class GoToUrlAction:
+	url: str
+
+
+class ClickElementAction:
+	index: int
+	xpath: Optional[str] = None
+
+
+# Filling forms
+class InputTextAction:
+	index: int
+	text: str
+	xpath: Optional[str] = None
+
+
+class DoneAction:
+	text: str
+
+
+class SwitchTabAction:
+	page_id: int
+
+
+class OpenTabAction:
+	url: str
+
+
+class ExtractPageContentAction:
+	include_links: bool
+
+
+class ScrollAction:
+	amount: Optional[int] = None  # The number of pixels to scroll. If None, scroll down/up one page
+
+
+class SendKeysAction:
+	keys: str
 
 3. ELEMENT INTERACTION:
    - Only use indexes that exist in the provided element list
@@ -66,27 +112,6 @@ class SystemPrompt:
    - Don't hallucinate actions
    - If the task requires specific information - make sure to include everything in the done function. This is what the user will see.
    - If you are running out of steps (current step), think about speeding it up, and ALWAYS use the done action as the last action.
-
-6. VISUAL CONTEXT:
-   - When an image is provided, use it to understand the page layout
-   - Bounding boxes with labels correspond to element indexes
-   - Each bounding box and its label have the same color
-   - Most often the label is inside the bounding box, on the top right
-   - Visual context helps verify element locations and relationships
-   - sometimes labels overlap, so use the context to verify the correct element
-
-7. Form filling:
-   - If you fill an input field and your action sequence is interrupted, most often a list with suggestions popped up under the field and you need to first select the right element from the suggestion list.
-
-8. ACTION SEQUENCING:
-   - Actions are executed in the order they appear in the list
-   - Each action should logically follow from the previous one
-   - If the page changes after an action, the sequence is interrupted and you get the new state.
-   - If content only disappears the sequence continues.
-   - Only provide the action sequence until you think the page will change.
-   - Try to be efficient, e.g. fill forms at once, or chain actions where nothing changes on the page like saving, extracting, checkboxes...
-   - only use multiple actions if it makes sense.
-
 
 """
 		text += f'   - use maximum {self.max_actions_per_step} actions per sequence'
